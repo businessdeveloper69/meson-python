@@ -1,0 +1,40 @@
+name: Verify Windows builds of separate Python bindings
+on:
+  push:
+    branches: [verify/native-library-windows]
+permissions:
+  contents: read
+jobs:
+  native-bindings:
+    name: Native junction and isolated installation (Python ${{ matrix.python }})
+    runs-on: windows-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.15']
+    env:
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      FORCE_COLOR: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: b0d38c8db6da471555bd0df9d660db6fc2698c04
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ matrix.python }}
+          allow-prereleases: true
+      - name: Verify Git revision and Python architecture
+        run: |
+          if ((git rev-parse HEAD) -ne 'b0d38c8db6da471555bd0df9d660db6fc2698c04') { throw 'Incorrect checkout' }
+          python -c 'import platform; print(platform.platform(), platform.machine(), platform.python_version())'
+      - name: Install build and test tools
+        run: |
+          python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip install ninja
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip install . --group test
+      - name: Build, install and call the C extension from the checkout and from the sdist
+        run: python -m pytest --showlocals -vv -s tests/test_sdist.py -k native_library_bindings
